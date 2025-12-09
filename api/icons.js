@@ -19,22 +19,53 @@ export default async function handler(req, res) {
 
       let svg = "";
 
-      // Fetch icon safely
       try {
+        // Try devicons first
         let r = await fetch(urlDev);
         if (r.ok) {
           svg = await r.text();
         } else {
+          // fallback to simple-icons
           r = await fetch(urlSimple);
           if (r.ok) svg = await r.text();
         }
       } catch (err) {
-        continue;
+        continue; // skip missing icons
       }
 
       if (!svg) continue;
 
-      svg = svg.replace(/<svg[^>]*>/, "").replace(/<\/svg>/, "");
+      // Remove outer <svg> wrapper
+      svg = svg.replace(/<svg[^>]*>/i, "").replace(/<\/svg>/i, "");
+
+      // Card + Icon
+      svgOut += `
+        <g transform="translate(${x}, 0)">
+          <rect width="${px}" height="${px}" rx="${round === "true" ? px * 0.25 : 0}"
+                fill="${bgColor}" stroke="${strokeColor}" stroke-width="2" />
+
+          <g transform="translate(${px * 0.20}, ${px * 0.20}) scale(${(px * 0.60) / 100})">
+            ${svg}
+          </g>
+        </g>
+      `;
+
+      x += px + 20; // spacing between icons
+    }
+
+    const final = `
+      <svg xmlns="http://www.w3.org/2000/svg" width="${x}" height="${px}">
+        ${svgOut}
+      </svg>
+    `;
+
+    res.setHeader("Content-Type", "image/svg+xml");
+    return res.status(200).send(final);
+
+  } catch (err) {
+    return res.status(500).send("Server Error");
+  }
+      }      svg = svg.replace(/<svg[^>]*>/, "").replace(/<\/svg>/, "");
 
       svgOut += `
         <g transform="translate(${x}, 0)">
