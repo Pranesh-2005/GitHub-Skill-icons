@@ -1,11 +1,8 @@
 {
   "version": 2,
   "functions": {
-    "api/*.js": {
+    "api/icons.js": {
       "runtime": "nodejs20.x"
     }
-  },
-  "routes": [
-    { "src": "/api/(.*)", "dest": "api/$1" }
-  ]
+  }
 }
