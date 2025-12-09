@@ -2,39 +2,83 @@ import fetch from "node-fetch";
 
 export default async function handler(req, res) {
   try {
-    const { i = "", size = 60, round = "true", theme = "light" } = req.query;
+    const { i = "", theme = "dark" } = req.query;
 
-    if (!i) {
-      return res.status(400).send("Missing ?i=");
-    }
+    if (!i) return res.status(400).send("Missing ?i=");
 
-    const icons = i.split(",").map(s => s.trim().toLowerCase());
-    const px = Number(size);
+    const icons = i.split(",").map(v => v.trim().toLowerCase());
 
-    const bgColor = theme === "dark" ? "#1f1f1f" : "#ffffff";
-    const strokeColor = theme === "dark" ? "#2f2f2f" : "#e5e5e5";
+    // Constants based on skillicons.dev design
+    const CARD = 56;         // outer card size
+    const ICON = 48;         // inner icon box
+    const PADDING = 4;       // padding inside card
+
+    const bg = theme === "light" ? "#ffffff" : "#1e1e1e";
+    const stroke = theme === "light" ? "#e5e5e5" : "#2e2e2e";
 
     let x = 0;
-    let svgOut = "";
+    let out = "";
 
     for (const icon of icons) {
-      const urlDev = `https://cdn.jsdelivr.net/gh/devicons/devicon/icons/${icon}/${icon}-original.svg`;
-      const urlSimple = `https://cdn.simpleicons.org/${icon}`;
+      const deviconURL = `https://cdn.jsdelivr.net/gh/devicons/devicon/icons/${icon}/${icon}-original.svg`;
+      const simpleiconURL = `https://cdn.simpleicons.org/${icon}`;
 
       let svg = "";
 
-      // First try DevIcons
+      // Try Devicon first
       try {
-        const r = await fetch(urlDev);
-        const txt = await r.text();
-        if (txt.includes("<svg")) svg = txt;
+        let r = await fetch(deviconURL);
+        let t = await r.text();
+        if (t.includes("<svg")) svg = t;
       } catch {}
 
-      // Fallback to SimpleIcons
+      // Fallback to simpleicons
       if (!svg) {
         try {
-          const r = await fetch(urlSimple);
-          const txt = await r.text();
+          let r = await fetch(simpleiconURL);
+          let t = await r.text();
+          if (t.includes("<svg")) svg = t;
+        } catch {}
+      }
+
+      if (!svg) continue;
+
+      // Extract inner SVG content
+      svg = svg.replace(/<svg[^>]*>/, "").replace(/<\/svg>/, "");
+
+      // Scale icon SVG into 48x48
+      const scale = ICON / 100;
+      const offset = (CARD - ICON) / 2;
+
+      out += `
+        <g transform="translate(${x},0)">
+          <rect width="${CARD}" height="${CARD}" rx="12"
+            fill="${bg}" stroke="${stroke}" stroke-width="2" />
+
+          <g transform="translate(${offset},${offset}) scale(${scale})">
+            ${svg}
+          </g>
+        </g>
+      `;
+
+      x += CARD + 12; // spacing between cards
+    }
+
+    const final = `
+      <svg xmlns="http://www.w3.org/2000/svg"
+           width="${x}" height="${CARD}">
+        ${out}
+      </svg>
+    `;
+
+    res.setHeader("Content-Type", "image/svg+xml");
+    res.send(final);
+
+  } catch (err) {
+    console.error("ERROR:", err);
+    res.status(500).send("Server Error");
+  }
+}          const txt = await r.text();
           if (txt.includes("<svg")) svg = txt;
         } catch {}
       }
