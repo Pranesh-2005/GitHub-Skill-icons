@@ -1,51 +1,60 @@
 export default async function handler(req, res) {
   try {
-    const { i = "", theme = "dark", perline = 15 } = req.query;
+    const { i = "", perline = 15, color } = req.query;
 
-    if (!i) return res.status(400).send("Missing ?i=");
+    if (!i) {
+      return res.status(400).send("Missing ?i=");
+    }
 
     const list = i.split(",").map((v) => v.trim().toLowerCase());
 
-    // ICON SIZE CONFIG
     const ICON_SIZE = 48;
     const PADDING = 8;
-    const GAP = 0;
     const RADIUS = 6;
-
-    // Theme colors
-    const colors = {
-      dark: { bg: "#242938" },
-      light: { bg: "#FFFFFF" },
-    };
-
-    const bgFill = colors[theme]?.bg || colors.dark.bg;
+    const GAP = 4;
 
     const fetched = [];
 
     for (const iconSlug of list) {
-      const simpleUrl = `https://cdn.simpleicons.org/${iconSlug}`;
-
       try {
-        const r = await fetch(simpleUrl);
+        // Build the SimpleIcons URL
+        // If a hex color is provided via ?color=, use it
+        const hex = color ? color.replace("#", "") : "";
+        const url = hex
+          ? `https://cdn.simpleicons.org/${iconSlug}/${hex}`
+          : `https://cdn.simpleicons.org/${iconSlug}`;
 
-        if (r.ok) {
-          const text = await r.text();
+        const r = await fetch(url);
 
-          const vbMatch = text.match(/viewBox="([^"]*)"/);
-          const viewBox = vbMatch ? vbMatch[1] : "0 0 24 24";
-
-          // Remove SVG wrapper
-          const content = text.replace(/<svg[^>]*>([\s\S]*?)<\/svg>/, "$1");
-
-          fetched.push({ content, viewBox });
+        if (!r.ok) {
+          console.warn("Icon not found:", iconSlug, r.status);
+          continue;
         }
+
+        const rawSvg = await r.text();
+
+        // Extract viewBox
+        const vbMatch = rawSvg.match(/viewBox="([^"]+)"/i);
+        const viewBox = vbMatch ? vbMatch[1] : "0 0 24 24";
+
+        // Extract <path> and children
+        const contentMatch = rawSvg.match(
+          /<svg[^>]*>([\s\S]*?)<\/svg>/i
+        );
+        const content = contentMatch ? contentMatch[1].trim() : "";
+
+        fetched.push({ content, viewBox });
       } catch (e) {
-        console.error(`Failed to fetch icon for: ${iconSlug}`, e);
+        console.error("Failed to fetch icon:", iconSlug, e);
       }
     }
 
     if (fetched.length === 0) {
-      return res.status(404).send("No valid icons found");
+      return res
+        .status(404)
+        .send(
+          "No valid icons found. Try valid slugs like ?i=github,python,react"
+        );
     }
 
     const perLineNum = Math.min(Math.max(Number(perline), 1), 50);
@@ -61,22 +70,23 @@ export default async function handler(req, res) {
     fetched.forEach((item, index) => {
       const col = index % perLineNum;
       const row = Math.floor(index / perLineNum);
-
       const x = col * (ICON_SIZE + GAP);
       const y = row * (ICON_SIZE + GAP);
 
+      // Scale icons (SimpleIcons default size is 24)
+      const scale = (ICON_SIZE - PADDING * 2) / 24;
+
       iconBlocks += `
         <g transform="translate(${x}, ${y})">
-          <rect width="${ICON_SIZE}" height="${ICON_SIZE}" rx="${RADIUS}" fill="${bgFill}" />
-          <svg
-            x="${PADDING}"
-            y="${PADDING}"
-            width="${ICON_SIZE - PADDING * 2}"
-            height="${ICON_SIZE - PADDING * 2}"
-            viewBox="${item.viewBox}"
-          >
+          <rect
+            width="${ICON_SIZE}"
+            height="${ICON_SIZE}"
+            rx="${RADIUS}"
+            fill="transparent"
+          />
+          <g transform="translate(${PADDING}, ${PADDING}) scale(${scale})">
             ${item.content}
-          </svg>
+          </g>
         </g>
       `;
     });
@@ -90,16 +100,16 @@ export default async function handler(req, res) {
       >
         ${iconBlocks}
       </svg>
-    `;
+    `.trim();
 
     res.setHeader("Content-Type", "image/svg+xml");
     res.setHeader(
       "Cache-Control",
       "public, max-age=86400, stale-while-revalidate=604800"
     );
-    return res.status(200).send(finalSvg);
+    res.status(200).send(finalSvg);
   } catch (err) {
     console.error(err);
-    return res.status(500).send("Internal Server Error");
+    res.status(500).send("Internal Server Error");
   }
 }
