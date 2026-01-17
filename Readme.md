@@ -17,7 +17,7 @@
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/yourusername/GitHub-Skill-icons.git
+   git clone https://github.com/Pranesh-2005/GitHub-Skill-icons.git
    cd GitHub-Skill-icons
    ```
 
